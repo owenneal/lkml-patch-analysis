@@ -10,7 +10,7 @@ from typing import Dict, Optional, Set, List
 from bs4 import BeautifulSoup
 from dateutil import parser as date_parser
 import sqlite3
-from git_pull_case_study import get_best_email_body
+from utils import get_best_email_body
 
 _maintainer_emails_cache = None
 

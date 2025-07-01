@@ -5,21 +5,11 @@ from email_parser import parse_email_content, extract_patch_signature_improved, 
 from bs4 import BeautifulSoup
 import difflib
 import requests
-
-#xjtuwxg xiaoguang github user name
+from utils import get_best_email_body
 
 GIT_PULL_EMAILS = 6021
 
-def get_best_email_body(html_content: str) -> str:
-    """
-    Try to extract the best possible plain text body from an email's HTML content.
-    Uses parse_email_content, but falls back to get_plaintext_body if the result is empty or flat.
-    """
-    parsed = parse_email_content(html_content)
-    body = parsed.get('message_body', '') or ''
-    if body.count('\n') < 5 or len(body.splitlines()) <= 1:
-        body = get_plaintext_body(html_content)
-    return body
+
 
 
 
@@ -77,7 +67,7 @@ def organize_git_pull_patches(limit: int = 100):
         # If the body is a single long line, try extracting plain text from HTML
         if body.count('\n') < 5 or len(body.splitlines()) <= 1:
             print("Body looks flat, extracting plain text from HTML...")
-            body = get_plaintext_body(html_content)
+            body = get_best_email_body(html_content)
 
 
         # print(f"Email {email_id} body length: {len(body)}")
@@ -95,22 +85,6 @@ def organize_git_pull_patches(limit: int = 100):
         }
     return organized
 
-
-
-def get_plaintext_body(html_content: str) -> str:
-    """
-    Extract plain text from HTML, preserving line breaks.
-    """
-    soup = BeautifulSoup(html_content, "html.parser")
-    # Replace <br> and <p> with newlines
-    for br in soup.find_all("br"):
-        br.replace_with("\n")
-    for p in soup.find_all("p"):
-        p.insert_before("\n")
-    text = soup.get_text("\n")
-    # Remove excessive blank lines
-    text = re.sub(r'\n+', '\n', text)
-    return text.strip()
 
 
 
