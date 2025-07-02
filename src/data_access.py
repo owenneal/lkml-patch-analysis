@@ -9,9 +9,10 @@ import sqlite3
 import re
 from typing import List, Tuple
 from collections import defaultdict
+import os
 
 # database file path
-DATABASE_FILE = 'lkml-patch-analysis/lkml-data-2024.db'
+DATABASE_FILE = 'lkml-data-2024.db'
 
 """
     Get a connection to the SQLite database.
@@ -102,6 +103,26 @@ def get_patch_emails(limit: int = 1000) -> List[Tuple]:
     
     conn.close()
     return emails
+
+
+def get_all_patch_emails() -> list:
+    """
+    Get all patch-related emails from the database.
+    Returns:
+        List of tuples containing (id, title, url, html_content)
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, title, url, html_content FROM mails 
+        WHERE title LIKE '%[PATCH%' OR title LIKE '%Re:%[PATCH%'
+        ORDER BY id
+    """)
+    emails = cursor.fetchall()
+    conn.close()
+    return emails
+
+
 
 
 """
@@ -223,7 +244,12 @@ def extract_thread_signature(title: str) -> str:
 """
 def analyze_database_coverage():
 
-    conn = get_connection()
+    try:
+        conn = get_connection()
+    except sqlite3.OperationalError as e:
+        print(f"Error connecting to database: {e}")
+        return
+    
     cursor = conn.cursor()
     
     # get total  email count

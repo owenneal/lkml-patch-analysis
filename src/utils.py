@@ -12,6 +12,8 @@ def get_plaintext_body(html_content: str) -> str:
     return text.strip()
 
 def get_best_email_body(html_content: str, parse_email_content_func=None) -> str:
+    if not html_content:
+        return ""
     body = ""
     if parse_email_content_func:
         parsed = parse_email_content_func(html_content)

@@ -346,7 +346,7 @@ def parse_email_content(html_content: str) -> Dict:
     if pre_tag:
         email_data['message_body'] = pre_tag.get_text()
 
-    plain_text_body = get_best_email_body(email_data['message_body'])
+    plain_text_body = get_best_email_body(email_data['message_body'] or "")
     email_data['message_body'] = plain_text_body if plain_text_body else email_data['message_body']
 
     

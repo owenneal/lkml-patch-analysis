@@ -4,7 +4,7 @@ import re
 
 
 def create_maintainer_DB():
-    conn = sqlite3.connect('lkml-patch-analysis/maintainers.db')
+    conn = sqlite3.connect('./maintainers.db')
     cursor = conn.cursor()
     
     cursor.execute('''

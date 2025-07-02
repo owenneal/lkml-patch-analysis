@@ -30,7 +30,7 @@ we weren't really focusing on that currently
 Install required libraries with:
 
 ```sh
-pip install beautifulsoup4 networkx requests tqdm
+pip install beautifulsoup4 networkx requests tqdm dateutils pyvis
 ```
 or other way if not using pip
 
