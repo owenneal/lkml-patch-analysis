@@ -9,10 +9,13 @@ import sqlite3
 import re
 from typing import List, Tuple
 from collections import defaultdict
-import os
 
 # database file path
-DATABASE_FILE = 'lkml-data-2024.db'
+DATABASE_FILE = 'lkml-patch-analysis/lkml-data-2024.db'
+SUSPECTED_CVE_DATABASE_FILE = "lkml-patch-analysis/suspected_cve_patches.db"
+
+
+
 
 """
     Get a connection to the SQLite database.
@@ -23,6 +26,28 @@ DATABASE_FILE = 'lkml-data-2024.db'
 def get_connection():
     return sqlite3.connect(DATABASE_FILE)
 
+def get_suspected_cve_patches(limit: int = 1000, db_path: str = SUSPECTED_CVE_DATABASE_FILE) -> list:
+    """
+    Get suspected CVE-related patch emails from the suspected_cve_patches table.
+    Args:
+        limit: Max number of emails to retrieve
+    Returns:
+        List of tuples containing (email_id, subject, url, match_cve_id, match_type, match_keyword)
+    """
+
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT email_id, subject, url, match_cve_id, match_type, match_keyword
+        FROM suspected_cve_patches
+        ORDER BY email_id
+        LIMIT ?
+    """, (limit,))
+    emails = cursor.fetchall()
+    conn.close()
+    return emails
 
 """
     Print database structure and sample data.
@@ -340,11 +365,11 @@ def populate_git_pull_table():
     conn.close()
 
 
-def get_git_pull_emails(limit: int = None) -> List[Tuple]:
+def get_git_pull_emails(limit: int = None, db_path = SUSPECTED_CVE_DATABASE_FILE) -> List[Tuple]:
     """
     Get only original GIT PULL emails (not replies) from the table.
     """
-    conn = get_connection()
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     query = """
         SELECT id, title, url, html_content, pull_type
@@ -368,7 +393,7 @@ def get_git_pull_statistics():
     Returns:
         Dictionary with counts of each pull type
     """
-    conn = get_connection()
+    conn = sqlite3.connect(SUSPECTED_CVE_DATABASE_FILE)
     cursor = conn.cursor()
     
     cursor.execute("""

@@ -129,7 +129,7 @@ python src/main.py --sample-size 1000
 - This will generate an interactive HTML file (e.g., `patch_evolution_graph.html`) in the project directory.
 - You can open this file in your browser to explore the patch/thread relationships.
 
-#### **Export Graph to Neo4j (optional)**
+#### 6. **Export Graph to Neo4j (optional)**
 
 If you want to export the graph to a Neo4j database for advanced querying and visualization:
 
@@ -139,7 +139,7 @@ python src/main.py --export-neo4j --sample-size 1000
 
 - Make sure Neo4j Desktop or Server is running and the connection details in the script match your setup.
 
-#### **Batch Processing for Large Datasets**
+#### 7. **Batch Processing for Large Datasets**
 
 For large-scale graph creation and export (in batches):
 
@@ -149,11 +149,59 @@ python src/main.py --full-scale --batch-size 5000 --export-neo4j
 
 - This will process emails in batches and export each batch to Neo4j.
 
+
+#### 8. **CVEs and Suspected Patch Analysis**
+
+
+### Downloading the CVE List
+
+To analyze CVEs, you need the official CVE JSON files.  
+We recommend using the [CVEProject/cvelistV5](https://github.com/CVEProject/cvelistV5) repository.
+
+1. Clone the CVE list repository:
+    ```sh
+    git clone https://github.com/CVEProject/cvelistV5.git
+    ```
+2. The 2024 CVEs will be in:  
+   `cvelistV5/cves/2024/`
+
+3. Make sure this path matches the `CVE_ROOT_DIR` in your `import_cve_jsons.py` (default is `cvelistV5\cves\2024`).
+
+
+### Suspected CVE Patch Analysis
+
+#### **Step 1: Import CVEs and Create Linux Kernel Table**
+
+This imports CVE JSONs and creates the `linux_kernel_cves` table in `lkml-patch-analysis/suspected_cve_patches.db`:
+
+```sh
+python lkml-patch-analysis/src/find_suspected_cve_patches.py --import-cves
+```
+
+#### **Step 2: Find and Store Suspected CVE Patches**
+
+This scans LKML emails for patches likely related to Linux kernel CVEs and stores them in the `suspected_cve_patches` table:
+
+```sh
+python lkml-patch-analysis/src/find_suspected_cve_patches.py --find-suspected
+```
+
+#### **Step 3: Populate Git Pull Emails Table**
+
+This extracts `[GIT PULL]` emails from the main LKML database and stores them in the `git_pull_emails` table in `suspected_cve_patches.db`.  
+You can limit the number of emails processed or not include a limit to use the entire mails database:
+
+```sh
+python lkml-patch-analysis/src/find_suspected_cve_patches.py --populate-gitpull --limit 10000
+```
+
 ---
+
 
 **Note:**  
 - The HTML graph files are saved as `patch_evolution_graph.html` (and similar names) in the `lkml-patch-analysis/` directory.
 - You do **not** need to run `case_study.py` directly; all relevant analysis is now handled via `main.py` and `git_pull_case_study.py`.
+
 
 ## Script and File Descriptions
 
@@ -225,8 +273,40 @@ python src/main.py --full-scale --batch-size 5000 --export-neo4j
 lkml official maintainers to use in tandem with the case_study.py heuristic approach)
   (Optional) Scrapes and builds the maintainers database from kernel sources.
 
+- **src/find_suspected_cve_patches.py**  
+  Purpose:
+    Standalone script to manage CVE data import, suspected patch detection, and git pull email extraction for CVE research.
+
+  Key Features:
+    - Imports CVE JSONs from the official CVE list and creates the linux_kernel_cves table.
+    - Scans LKML emails for patches likely related to Linux kernel CVEs and stores them in the suspected_cve_patches table.
+    - Extracts [GIT PULL] emails from the main LKML database and stores them in the git_pull_emails table.
+    - Command-line interface for modular operation (--import-cves, --find-suspected, --populate-gitpull, --limit).
+
+- **src/import_cve_jsons.py**
+  Purpose:
+    Imports CVE JSON files (e.g., from CVEProject/cvelistV5) into an SQLite database for further analysis.
+
+  Key Features:
+    - Parses all CVE JSONs in a specified directory (default: 2024 CVEs).
+    - Extracts relevant fields (CVE ID, title, description, CWE, vendor, product, references).
+    - Populates the cve_json_records table.
+    - Creates and populates the linux_kernel_cves table for Linux-specific CVEs.
+
+
+- **src/determine_patch_quality.py**
+  Purpose:
+    Analyzes patch version history to label patch threads as "good", "average", or "bad" based on the number of revisions.
+
+  Key Features:
+    - Groups patch emails by signature and tracks version numbers.
+    - Labels patches as "good" (≤2 versions), "average" (3–4), or "bad" (≥5).
+    - Outputs a summary file (patch_quality_labels.txt) for further research or reporting.
+
+
 - **lib/**  
   JavaScript and CSS libraries for HTML visualization (not needed for text reports).
+
 
 ---
 
@@ -240,7 +320,6 @@ lkml official maintainers to use in tandem with the case_study.py heuristic appr
 
 - **unmatched_patch_commits.txt**:  
   Commits that could not be matched to any patch discussion.
-
 ---
 
 ## Troubleshooting
