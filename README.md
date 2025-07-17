@@ -30,7 +30,7 @@ we weren't really focusing on that currently
 Install required libraries with:
 
 ```sh
-pip install beautifulsoup4 networkx requests tqdm dateutils pyvis
+pip install beautifulsoup4 networkx requests tqdm dateutils pyvis OpenAI
 ```
 or other way if not using pip
 
@@ -194,6 +194,49 @@ You can limit the number of emails processed or not include a limit to use the e
 ```sh
 python lkml-patch-analysis/src/find_suspected_cve_patches.py --populate-gitpull --limit 10000
 ```
+
+#### **Step 4: Categorize Patches with an LLM**
+
+This script uses a local Large Language Model (LLM) server (like LM Studio) to automatically categorize the type of vulnerability each patch fixes.
+
+1.  Ensure your local LLM server is running.
+2.  Run the categorization script. The `--setup` flag is only needed the very first time to prepare the database.
+
+    ```sh
+    # First time setup
+    python lkml-patch-analysis/src/categorize_cve_patches.py --setup
+
+    # Run categorization on all CVEs
+    python lkml-patch-analysis/src/categorize_cve_patches.py
+
+    # Re-process only the CVEs that were previously marked as "Other"
+    python lkml-patch-analysis/src/categorize_cve_patches.py --redo-other
+    ```
+
+#### **Step 5: Generate a Report of Categorized CVEs**
+
+After categorizing the CVEs, you can generate a clean CSV report.
+
+```sh
+python lkml-patch-analysis/src/generate_cve_category_csv.py
+```
+This will create a file like `cve_categories_YYYYMMDD.csv` in the `src` directory.
+
+#### **Step 6: Visualize a Specific CVE Patch Thread**
+
+To visualize the email discussion graph for a single CVE, use the `cve_patch_graph_tool.py` script.
+
+1.  First, list all available CVEs to find one to investigate:
+    ```sh
+    python lkml-patch-analysis/src/cve_patch_graph_tool.py --list-cves
+    ```
+
+2.  Then, generate the graph for a specific CVE ID:
+    ```sh
+    python lkml-patch-analysis/src/cve_patch_graph_tool.py CVE-2024-26687 --graph
+    ```
+This will create an interactive HTML file (e.g., `patch_evolution_graph_CVE_2024_26687.html`) showing the relationships between the emails in that thread.
+
 
 ---
 

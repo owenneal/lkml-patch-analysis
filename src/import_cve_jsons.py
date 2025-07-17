@@ -55,6 +55,10 @@ def insert_cve_json_records(db_path, record):
     conn.close()
 
 def extract_info_from_json(json_data):
+    """
+    Extracts data from the CVE JSON structure.
+    Returns a dictionary with the relevant fields.
+    """
     cve_id = json_data.get("cveMetadata", {}).get("cveId", "")
     cna = json_data.get("containers", {}).get("cna", {})
     title = cna.get("title", "")

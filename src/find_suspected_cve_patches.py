@@ -50,7 +50,6 @@ def populate_git_pull_table_in_suspected_db(src_db=DB_PATH, dst_db=SUSPECTED_CVE
     dst_conn = sqlite3.connect(dst_db)
     dst_cursor = dst_conn.cursor()
 
-    # Create the table if it doesn't exist
     dst_cursor.execute("""
         CREATE TABLE IF NOT EXISTS git_pull_emails (
             id INTEGER PRIMARY KEY,
@@ -101,7 +100,6 @@ def export_suspected_cve_patches(src_db = DB_PATH, dst_db = SUSPECTED_CVE_DB):
     dst_conn = sqlite3.connect(dst_db)
     dst_cursor = dst_conn.cursor()
 
-    # first make the table in the new database
     dst_cursor.execute("""
         CREATE TABLE IF NOT EXISTS suspected_cve_patches (
             email_id INTEGER PRIMARY KEY,
@@ -113,7 +111,6 @@ def export_suspected_cve_patches(src_db = DB_PATH, dst_db = SUSPECTED_CVE_DB):
         )
     """)
 
-    # now copy the data from the source database to the destination database
     src_cursor.execute("SELECT email_id, subject, url, match_cve_id, match_type, match_keyword FROM suspected_cve_patches")
     rows = src_cursor.fetchall()
     dst_cursor.executemany("""
@@ -196,7 +193,30 @@ def find_and_store_suspected_patches():
     conn.close()
     print("Title-based suspected CVE patches stored.")
 
+
+def search_patch_emails_by_title(keyword, db_path="lkml-patch-analysis/lkml-data-2024.db"):
+    """
+    Search the mails table for emails whose title contains the given keyword (case-insensitive).
+    Prints all matching email IDs, subjects, and URLs.
+    """
+    import sqlite3
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, title, url
+        FROM mails
+        WHERE LOWER(title) LIKE ?
+        ORDER BY id
+    """, (f"%{keyword.lower()}%",))
+    results = cursor.fetchall()
+    conn.close()
+    print(f"Found {len(results)} emails with title containing '{keyword}':")
+    for eid, subject, url in results:
+        print(f"Email ID: {eid}\nSubject: {subject}\nURL: {url}\n")
+
+
 def main():
+    #search_patch_emails_by_title("iommu/vt-d: Fix NULL domain on device release")
     parser = argparse.ArgumentParser(
         description="LKML Patch Analysis: Import CVEs and find suspected CVE patches."
     )
@@ -252,6 +272,9 @@ def main():
 
     if not (args.import_cves or args.find_suspected or args.populate_gitpull):
         parser.print_help()
+
+
+
 
 if __name__ == "__main__":
     main()

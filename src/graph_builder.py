@@ -6,6 +6,7 @@ of email relationships based on patch topics and thread relationships.
 """
 
 import networkx as nx
+import re
 from collections import defaultdict
 from typing import Dict, List, Tuple
 from email_parser import parse_email_content, extract_patch_signature_improved, extract_temporal_info
@@ -612,3 +613,181 @@ def analyze_graph_components(G, email_data):
             print(f"  Limit {limit}: {total_nodes_by_limit[limit]} nodes")
         elif limit <= len(components_with_multiple):
             print(f"  Limit {limit}: Not enough multi-node components")
+
+
+
+def create_in_reply_to_graph(emails):
+    G = nx.DiGraph()
+    email_data = {}
+
+    msgid_to_node = {}
+    for email_id, title, url, html_content in emails:
+        parsed = parse_email_content(html_content)
+        email_data[email_id] = parsed
+        G.add_node(email_id, subject=parsed.get('subject', ''), author=parsed.get('from_author', ''), url=url)
+        msgid = parsed.get('message_id')
+        if msgid:
+            msgid_to_node[msgid] = email_id
+
+    edges_added = 0
+    for email_id, data in email_data.items():
+        parent_msgid = data.get('in_reply_to')
+        if parent_msgid and parent_msgid in msgid_to_node:
+            parent_node_id = msgid_to_node[parent_msgid]
+            if not G.has_edge(parent_node_id, email_id):
+                G.add_edge(parent_node_id, email_id, relationship='in_reply_to', weight=0.5)
+                edges_added += 1
+
+    print(f"Added {edges_added} in-reply-to edges")
+    return G, email_data
+
+
+def extract_patch_sig_and_version(subject):
+    """
+    Extracts the patch signature and Linux version from the patch email subject.
+    Also gets version, and series information for the patch thread.
+    """
+    patch_sig = extract_patch_signature_improved(subject)
+    version_match = re.search(r'v(\d+)', subject)
+    version_num = int(version_match.group(1)) if version_match else 1
+    linux_match = re.search(r'\[PATCH\s+([0-9.]+)\]', subject)
+    linux_version = linux_match.group(1) if linux_match else None
+    series_match = re.search(r'(\d+)/(\d+)', subject)
+    series_pos = int(series_match.group(1)) if series_match else None
+    series_total = int(series_match.group(2)) if series_match else None
+    return patch_sig, version_num, linux_version, series_pos, series_total
+
+
+def _add_patch_nodes(G, emails):
+    email_data = {}
+    patch_nodes = {}
+    for email_id, title, url, html_content in emails:
+        parsed = parse_email_content(html_content)
+        email_data[email_id] = parsed
+        subject = parsed.get('subject', '')
+        patch_sig, version_num, linux_version, _, _ = extract_patch_sig_and_version(subject)
+        if patch_sig and not subject.lower().startswith('re:'): #only have starting emails for threads be the roots
+            patch_nodes[(patch_sig, linux_version, version_num)] = email_id
+        G.add_node(email_id, subject=subject, author=parsed.get('from_author', ''), url=url, patch_signature=patch_sig, linux_version=linux_version, date=parsed.get('date', ''))
+    return email_data, patch_nodes
+
+def _add_patch_nodes_linux(G, emails):
+    email_data = {}
+    patch_nodes = defaultdict(list)
+    for email_id, title, url, html_content in emails:
+        parsed = parse_email_content(html_content)
+        email_data[email_id] = parsed
+        subject = parsed.get('subject', '')
+        patch_sig, version_num, linux_version, series_pos, series_total = extract_patch_sig_and_version(subject)
+        is_patch = '[PATCH' in subject.upper()
+        G.add_node(email_id, subject=subject, author=parsed.get('from_author', ''), url=url,
+                   patch_signature=patch_sig, version_num=version_num, linux_version=linux_version,
+                   series_pos=series_pos, series_total=series_total, is_patch=is_patch)
+        if is_patch and patch_sig:
+            patch_nodes[(patch_sig, linux_version)].append(email_id)
+    return email_data, patch_nodes
+
+def _add_patch_nodes_and_metadata(G, emails):
+    """
+    get data from patch signatures for the version, series position 
+    """
+    email_data = {}
+    patch_nodes = defaultdict(list)  # patch_sig -> list of email_ids
+    for email_id, title, url, html_content in emails:
+        parsed = parse_email_content(html_content)
+        email_data[email_id] = parsed
+        subject = parsed.get('subject', '')
+        patch_sig = extract_patch_signature_improved(subject)
+        version_match = re.search(r'v(\d+)', subject)
+        version_num = int(version_match.group(1)) if version_match else 1
+        series_match = re.search(r'(\d+)/(\d+)', subject)
+        series_pos = int(series_match.group(1)) if series_match else None
+        series_total = int(series_match.group(2)) if series_match else None
+        is_patch = '[PATCH' in subject.upper()
+        G.add_node(email_id, subject=subject, author=parsed.get('from_author', ''), url=url,
+                   patch_signature=patch_sig, version_num=version_num,
+                   series_pos=series_pos, series_total=series_total, is_patch=is_patch)
+        if is_patch and patch_sig:
+            patch_nodes[patch_sig].append(email_id)
+    return email_data, patch_nodes
+
+def _add_patch_evolution_and_series_edges_linux(G, patch_nodes):
+    for (patch_sig, linux_version), email_ids in patch_nodes.items():
+        # Sort by version, then series position
+        sorted_ids = sorted(email_ids, key=lambda eid: (
+            G.nodes[eid]['version_num'],
+            G.nodes[eid]['series_pos'] if G.nodes[eid]['series_pos'] is not None else 0
+        ))
+        for i in range(len(sorted_ids) - 1):
+            curr_id = sorted_ids[i]
+            next_id = sorted_ids[i + 1]
+            curr_ver = G.nodes[curr_id]['version_num']
+            next_ver = G.nodes[next_id]['version_num']
+            curr_series = G.nodes[curr_id]['series_pos']
+            next_series = G.nodes[next_id]['series_pos']
+            if next_ver > curr_ver:
+                G.add_edge(curr_id, next_id, relationship='version_evolution', weight=2.0)
+            elif next_series and curr_series and next_series > curr_series and curr_ver == next_ver:
+                G.add_edge(curr_id, next_id, relationship='series_progression', weight=1.5)
+
+def _add_reply_edges(G, email_data):
+    # Connect replies only to their direct parent
+    msgid_to_node = {data.get('message_id'): eid for eid, data in email_data.items() if data.get('message_id')}
+    for eid, data in email_data.items():
+        parent_msgid = data.get('in_reply_to')
+        if parent_msgid and parent_msgid in msgid_to_node:
+            parent_id = msgid_to_node[parent_msgid]
+            if not G.has_edge(parent_id, eid):
+                G.add_edge(parent_id, eid, relationship='reply', weight=1.0)
+
+def create_patch_evolution_graph_linux(emails):
+    G = nx.DiGraph()
+    email_data, patch_nodes = _add_patch_nodes_linux(G, emails)
+    _add_patch_evolution_and_series_edges_linux(G, patch_nodes)
+    _add_reply_edges(G, email_data)
+    print(f"Created patch evolution graph (with Linux version) with {len(G.nodes())} nodes and {len(G.edges())} edges")
+    return G, email_data
+
+
+
+def _add_version_evolution_edges(G, patch_nodes):
+    for (patch_sig, linux_version, version_num), email_id in patch_nodes.items():
+        # Find all patch nodes with the same signature and linux_version
+        patch_versions = []
+        for node_id in G.nodes:
+            node = G.nodes[node_id]
+            if (node.get('patch_signature') == patch_sig and
+                node.get('linux_version') == linux_version and
+                node_id != email_id and
+                not node['subject'].lower().startswith('re:')):
+                patch_versions.append((node.get('version_num', 1), node_id))
+        patch_versions.append((G.nodes[email_id].get('version_num', 1), email_id))
+        patch_versions.sort()
+        for i in range(len(patch_versions) - 1):
+            v1_id = patch_versions[i][1]
+            v2_id = patch_versions[i+1][1]
+            if not G.has_edge(v1_id, v2_id):
+                G.add_edge(v1_id, v2_id, relationship='version_evolution', weight=2.0)
+
+
+def _add_patch_edges(G, email_data, patch_nodes):
+    # reply edges
+    for email_id, parsed in email_data.items():
+        subject = parsed.get('subject', '')
+        patch_sig, version_num, linux_version, _, _ = extract_patch_sig_and_version(subject)
+        if subject.lower().startswith('re:') and patch_sig:
+            patch_key = (patch_sig, linux_version, version_num)
+            patch_node_id = patch_nodes.get(patch_key)
+            if patch_node_id and patch_node_id != email_id:
+                G.add_edge(patch_node_id, email_id, relationship='reply_to_patch', weight=1.0)
+
+
+def create_patch_name_version_graph(emails):
+    G = nx.DiGraph()
+    email_data, patch_nodes = _add_patch_nodes(G, emails)
+    _add_patch_edges(G, email_data, patch_nodes)
+    _add_version_evolution_edges(G, patch_nodes)
+    print(f"Created patch name/version graph with {len(G.nodes())} nodes and {len(G.edges())} edges")
+    return G, email_data
+
+

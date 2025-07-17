@@ -77,7 +77,7 @@ def visualize_basic_graph(G, email_data, component_limit=5):
     print("Basic graph saved as 'email_graph_basic.html'")
 
 
-def visualize_evolution_graph(G, email_data, component_limit=10, max_nodes=200):
+def visualize_evolution_graph(G, email_data, component_limit=10, max_nodes=200, output_file="patch_evolution_graph.html"):
     """
     Create visualization showing patch evolution with temporal ordering.
     
@@ -110,11 +110,10 @@ def visualize_evolution_graph(G, email_data, component_limit=10, max_nodes=200):
         )
         
         if has_evolution:
-            selected_components.insert(0, component)  # Prioritize evolution components
+            selected_components.insert(0, component)
         else:
             selected_components.append(component)
     
-    # Limit total nodes
     nodes_to_include = set()
     for component in selected_components:
         if len(nodes_to_include) + len(component) <= max_nodes:
@@ -124,16 +123,12 @@ def visualize_evolution_graph(G, email_data, component_limit=10, max_nodes=200):
     
     print(f"Including {len(nodes_to_include)} nodes from {len(selected_components)} components")
     
-    # Create subgraph
     subgraph = G.subgraph(nodes_to_include).copy()
-    
-    # Remove self-loops
     self_loops = list(nx.selfloop_edges(subgraph))
     subgraph.remove_edges_from(self_loops)
     
     print(f"Visualizing {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges")
     
-    # Create Pyvis network with hierarchical layout for evolution
     net = Network(
         height="900px", 
         width="100%", 
@@ -142,18 +137,14 @@ def visualize_evolution_graph(G, email_data, component_limit=10, max_nodes=200):
         directed=True
     )
     
-    # Component colors
     component_colors = ["#4CAF50", "#2196F3", "#FF9800", "#9C27B0", "#F44336", 
                        "#00BCD4", "#FFEB3B", "#795548", "#607D8B", "#E91E63"]
-    
-    # Create node to component mapping
     node_to_component = {}
     for i, component in enumerate(selected_components):
         for node in component:
             if node in nodes_to_include:
                 node_to_component[node] = i
     
-    # Add nodes with evolution-aware styling
     for node in subgraph.nodes():
         email = email_data.get(node, {})
         subject = email.get('subject', f'Email {node}')[:40] + "..."
@@ -163,35 +154,29 @@ def visualize_evolution_graph(G, email_data, component_limit=10, max_nodes=200):
         patch_version = G.nodes[node].get('patch_version', '')
         version_num = G.nodes[node].get('version_num', 0)
         series_info = G.nodes[node].get('series_info', '')
-        
-        # Color based on component and version
         component_idx = node_to_component.get(node, 0)
         base_color = component_colors[component_idx % len(component_colors)]
         
-        # Size and shape based on patch status and version
         if is_patch:
             if version_num > 1:
-                # Higher versions are larger and more prominent
                 size = 25 + (version_num * 5)
-                color = base_color  # Bright color for patches
-                shape = "diamond"  # Diamond for evolved patches
+                color = base_color
+                shape = "diamond"  
             else:
                 size = 30
                 color = base_color
-                shape = "box"  # Box for initial patches
+                shape = "box" 
         else:
             size = 15
-            color = base_color.replace("F", "A")  # Darker for replies
+            color = base_color.replace("F", "A")
             shape = "circle"
-        
-        # Create informative label
+       
         label = f"{node}"
         if patch_version:
             label += f"\n{patch_version}"
         if series_info:
             label += f"\n{series_info}"
         
-        # Enhanced hover info
         title_parts = [
             f"ID: {node}",
             f"Subject: {subject}",
@@ -225,22 +210,22 @@ def visualize_evolution_graph(G, email_data, component_limit=10, max_nodes=200):
             
             # Style based on evolution type
             if evolution_type == 'version_upgrade':
-                color = "#FF0080"  # Bright pink for version evolution
+                color = "#FF0080"  
                 width = 6
                 arrows = {"to": {"enabled": True, "scaleFactor": 2}}
                 edge_title = f"Version Evolution: {relationship}"
             elif evolution_type == 'series_progression':
-                color = "#FFFF00"  # Yellow for series progression
+                color = "#FFFF00"  
                 width = 5
                 arrows = {"to": {"enabled": True, "scaleFactor": 1.5}}
                 edge_title = f"Series Progression: {relationship}"
             elif relationship == 'same_patch_topic':
-                color = "#00FF00"  # Green for same topic
+                color = "#00FF00" 
                 width = 3
                 arrows = {"to": {"enabled": False}}
                 edge_title = f"Same Topic: {relationship}"
             else:
-                color = "#00BFFF"  # Blue for thread replies
+                color = "#00BFFF"  
                 width = 2
                 arrows = {"to": {"enabled": True, "scaleFactor": 1}}
                 edge_title = f"Discussion: {relationship}"
@@ -253,7 +238,7 @@ def visualize_evolution_graph(G, email_data, component_limit=10, max_nodes=200):
                 arrows=arrows
             )
     
-    # Fixed layout configuration (no floating nodes)
+    # Fixed layout configuration
     net.set_options("""
     {
         "physics": {
@@ -288,7 +273,6 @@ def visualize_evolution_graph(G, email_data, component_limit=10, max_nodes=200):
     }
     """)
     
-    # Add HTML controls for physics toggle
     net.html = net.html.replace(
         '</body>',
         '''
@@ -313,17 +297,5 @@ def visualize_evolution_graph(G, email_data, component_limit=10, max_nodes=200):
         </body>'''
     )
     
-    # Save with descriptive name
-    net.save_graph("patch_evolution_graph.html")
-    print("Patch evolution graph saved as 'patch_evolution_graph.html'")
-    print("\n=== EVOLUTION LEGEND ===")
-    print("  💎 Diamonds = Evolved patches (v2+)")
-    print("  📦 Boxes = Initial patches (v1)")
-    print("  ⭕ Circles = Replies/Discussions")
-    print("  💖 Pink arrows = Version evolution (v1→v2→v3)")
-    print("  💛 Yellow arrows = Series progression (4/7→5/7)")
-    print("  🟢 Green lines = Same patch topic")
-    print("  🔵 Blue arrows = Discussion flow")
-    print("  Different colors = Different patch families")
-    print("  Left→Right = Temporal progression")
-    print("  Toggle Physics button = Freeze/unfreeze layout")
+    net.save_graph(output_file)
+    print(f"Patch evolution graph saved as '{output_file}'")

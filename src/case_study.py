@@ -234,7 +234,6 @@ def verify_merge_indicators(patch_analysis: Dict, email_data: Dict, G: nx.DiGrap
         for node_id in G.nodes():
             email = email_data.get(node_id, {})
             if email.get('patch_info'):
-                from email_parser import extract_patch_signature_improved
                 node_signature = extract_patch_signature_improved(email.get('subject', ''))
                 if node_signature == signature:
                     patch_ids.append(node_id)
@@ -398,7 +397,6 @@ def write_patch_section(f, patches, email_data, G, limit=20):
         for node_id in G.nodes():
             email = email_data.get(node_id, {})
             if email.get('patch_info'):
-                from email_parser import extract_patch_signature_improved
                 node_signature = extract_patch_signature_improved(email.get('subject', ''))
                 if node_signature == signature:
                     patch_ids.append(node_id)

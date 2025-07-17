@@ -11,19 +11,115 @@ from typing import List, Tuple
 from collections import defaultdict
 
 # database file path
-DATABASE_FILE = 'lkml-patch-analysis/lkml-data-2024.db'
+DATABASE_FILE = "lkml-patch-analysis/lkml-data-2024.db"
 SUSPECTED_CVE_DATABASE_FILE = "lkml-patch-analysis/suspected_cve_patches.db"
 
 
 
 
-"""
+def get_patch_emails_by_ids(email_ids: list, limit: int = 10000) -> list:
+    """
+    Get patch-related emails for a specific list of email IDs from the database.
+    Args:
+        email_ids: List of email IDs to retrieve
+        db_path: Path to the SQLite database
+    Returns:
+        List of tuples containing (id, title, url, html_content)
+    """
+    if not email_ids:
+        return []
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    placeholders = ",".join("?" for _ in email_ids)
+    query = f"""
+        SELECT id, title, url, html_content FROM mails
+        WHERE id IN ({placeholders})
+        ORDER BY id
+        LIMIT ?
+    """
+    cursor.execute(query, email_ids + [limit])
+    emails = cursor.fetchall()
+    conn.close()
+    return emails
+
+
+def get_all_cve_ids(db_path: str = SUSPECTED_CVE_DATABASE_FILE) -> list:
+    """
+    get all of the unique cve ids from the suspected cve patches database
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DISTINCT match_cve_id
+        FROM suspected_cve_patches
+        ORDER BY match_cve_id
+    """)
+    ids = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return ids
+
+
+
+def get_cve_ids_by_category(category: str, db_path: str = SUSPECTED_CVE_DATABASE_FILE) -> list:
+    """
+    Get all CVE IDs that match a specific "category" column from the suspected_cve_patches table.
+    
+    """
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT match_cve_id
+            FROM suspected_cve_patches
+            WHERE category = ?
+            ORDER BY match_cve_id
+        """, (category,))
+        ids = [row[0] for row in cursor.fetchall()]
+        return ids
+    except sqlite3.Error as e:
+        print(f"Error retrieving CVE IDs for category '{category}': {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_patches_for_cve(cve_id: str, db_path: str = SUSPECTED_CVE_DATABASE_FILE) -> list:
+    """
+    Get all patch records for a specific CVE ID from the suspected_cve_patches table.
+    
+    Args:
+        cve_id: The CVE ID to look up.
+        db_path: Path to the suspected CVEs database.
+        
+    Returns:
+        A list of tuples, where each tuple is a patch record (email_id, subject, url).
+    """
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT email_id, subject, url
+            FROM suspected_cve_patches
+            WHERE match_cve_id = ?
+        """, (cve_id,))
+        patches = cursor.fetchall()
+        return patches
+    except sqlite3.Error as e:
+        print(f"Error retrieving patches for CVE '{cve_id}': {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_connection():
+    """
     Get a connection to the SQLite database.
     
     Returns:
         SQLite connection object
 """
-def get_connection():
     return sqlite3.connect(DATABASE_FILE)
 
 def get_suspected_cve_patches(limit: int = 1000, db_path: str = SUSPECTED_CVE_DATABASE_FILE) -> list:
@@ -34,11 +130,8 @@ def get_suspected_cve_patches(limit: int = 1000, db_path: str = SUSPECTED_CVE_DA
     Returns:
         List of tuples containing (email_id, subject, url, match_cve_id, match_type, match_keyword)
     """
-
-
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
     cursor.execute("""
         SELECT email_id, subject, url, match_cve_id, match_type, match_keyword
         FROM suspected_cve_patches

@@ -437,19 +437,14 @@ def extract_patch_signature_improved(subject: str) -> Optional[str]:
 
     if not subject:
         return None
-    
-    # Remove common prefixes and normalize
     subject = subject.strip()
-    
-    # Remove "Re:" prefixes (handle multiple Re:)
+
     while subject.lower().startswith('re:'):
         subject = subject[3:].strip()
-    
-    # Extract the core patch title
     patch_patterns = [
         r'\[PATCH\s*(?:v\d+)?\s*(?:\d+/\d+)?\s*\]\s*(.*)',
         r'\[RFC\s*PATCH\s*(?:v\d+)?\s*(?:\d+/\d+)?\s*\]\s*(.*)',
-        r'\[.*?PATCH.*?\]\s*(.*)',  # More flexible pattern
+        r'\[.*?PATCH.*?\]\s*(.*)',
     ]
     
     for pattern in patch_patterns:
@@ -459,7 +454,6 @@ def extract_patch_signature_improved(subject: str) -> Optional[str]:
             normalized = normalize_title(core_title)
             return normalized if normalized else None
     
-    # If not a patch, return normalized subject
     normalized = normalize_title(subject)
     return normalized if normalized else None
 
@@ -477,14 +471,9 @@ def normalize_title(title: str) -> str:
 
     if not title:
         return ""
-    
-    # Convert to lowercase
     title = title.lower().strip()
-    # Remove trailing punctuation
     title = re.sub(r'[.!?]+$', '', title)
-    # Replace multiple spaces with single space
     title = re.sub(r'\s+', ' ', title) # \s+ means one or more whitespace characters
-    # Remove common variations in spacing around colons
     title = re.sub(r'\s*:\s*', ': ', title)
     return title.strip()
 

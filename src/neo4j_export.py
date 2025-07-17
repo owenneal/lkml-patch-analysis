@@ -391,12 +391,11 @@ def test_connectivity_queries(uri: str = "bolt://localhost:7687", user: str = "n
 
 
 if __name__ == "__main__":
-    # Import your existing modules
     from data_access import get_patch_emails, analyze_database_coverage
     from graph_builder import create_evolution_graph
     
     print("Getting emails (using same sample size as visualization)...")
-    emails = get_patch_emails(limit=1000)  # Same as your default
+    emails = get_patch_emails(limit=1000)
     
     print("Creating graph...")
     graph, email_data, patch_groups = create_evolution_graph(emails)

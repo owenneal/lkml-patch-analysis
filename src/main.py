@@ -24,7 +24,7 @@ from graph_builder import create_evolution_graph, analyze_graph_components, crea
 from visualization import visualize_evolution_graph
 from batch_processor import create_batch_processor
 from case_study import analyze_patch_merge_status, generate_case_study_report, verify_merge_indicators
-from email_parser import find_and_map_git_pull_patches, find_git_pull_emails_regex, check_git_pull_in_database
+from email_parser import find_and_map_git_pull_patches, find_git_pull_emails_regex, check_git_pull_in_database, extract_patch_signature_improved
 try:
     from neo4j_export import export_connected_subgraph_to_neo4j, test_connectivity_queries
     NEO4J_READY = True
@@ -179,7 +179,6 @@ def show_validation_sample(signature: str, analysis: Dict, email_data: Dict, G: 
     for node_id in G.nodes():
         email = email_data.get(node_id, {})
         if email.get('patch_info'):
-            from email_parser import extract_patch_signature_improved
             node_signature = extract_patch_signature_improved(email.get('subject', ''))
             if node_signature == signature:
                 merge_info = email.get('merge_info', {})
