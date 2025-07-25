@@ -1,5 +1,5 @@
-from data_access import get_patch_emails
-from email_parser import parse_email_content, extract_patch_signature_improved, extract_patch_info
+from ..core.data_access import get_patch_emails
+from ..core.email_parser import parse_email_content, extract_patch_signature_improved, extract_patch_info
 from collections import defaultdict
 
 

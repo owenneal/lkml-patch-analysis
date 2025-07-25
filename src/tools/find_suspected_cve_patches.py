@@ -1,6 +1,6 @@
 import sqlite3
 import argparse
-from import_cve_jsons import main as import_cve_jsons_main, create_linux_kernel_table
+from .import_cve_jsons import main as import_cve_jsons_main, create_linux_kernel_table
 
 
 """

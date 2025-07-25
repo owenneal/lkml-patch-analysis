@@ -1,8 +1,8 @@
 import sqlite3
 import argparse
 from openai import OpenAI
-from data_access import get_all_cve_ids, get_patch_emails_by_ids, get_cve_ids_by_category
-from email_parser import parse_email_content
+from ..core.data_access import get_all_cve_ids, get_patch_emails_by_ids, get_cve_ids_by_category
+from ..core.email_parser import parse_email_content
 
 
 """
@@ -28,8 +28,8 @@ The categories that the llm prompt can choose from are currently:
 
 """
 
-SUSPECTED_CVE_DB = "lkml-patch-analysis/suspected_cve_patches.db"
-LKML_DATA_DB = "lkml-patch-analysis/lkml-data-2024.db"
+SUSPECTED_CVE_DB = "suspected_cve_patches.db"
+LKML_DATA_DB = "lkml-data-2024.db"
 MAX_PROMPT_CHARS = 7000 #need to limit the char size for the llm context window of 4096 tokens
 
 client = OpenAI(base_url="http://localhost:1234/v1", api_key="not-needed")
@@ -96,15 +96,61 @@ def categorize_patch_thread(cve_id, patch_emails):
     Full Patch Thread Content:
     {full_thread_text}
 
-    Choose one of the following categories:
-    - Memory Management (e.g., buffer overflow, use-after-free, memory leak)
-    - Race Condition
-    - Improper Input Validation
-    - Logic Error / Incorrect Calculation
-    - Security Feature Bypass
-    - Resource Management (e.g., file descriptor leak, resource lock issue)
-    - NULL Pointer Dereference
-    - Other (please specify) 
+    Choose the most specific category possible from the list below. If a specific bug type fits, choose it. If not, choose the general high-level category.
+    1. Memory Management Bugs
+        - Buffer Overflow
+        - Use-After-Free
+        - Memory Leak
+        - Out-of-Bounds Access
+        - Double Free
+        - Uninitialized Memory Use
+        - Invalid Free / Corruption of Slab Metadata
+    2. Race Conditions
+        - TOCTOU (Time-Of-Check to Time-Of-Use)
+        - Improper Locking or Missing Locking
+        - Atomicity Violations
+        - Deadlock / Livelock
+    3. Improper Input Validation
+        - User-Controlled Input Not Sanitized
+        - Integer Overflow / Underflow
+        - Signedness Bugs
+        - Improper Bounds Checking
+    4. Logic Errors / Incorrect Computation
+        - Incorrect Conditionals
+        - Off-by-One Errors
+        - Miscalculated Buffer Sizes or Lengths
+    5. Security Feature Bypass
+        - Credential Leaks or Misuse
+        - Incorrect Privilege Checks
+        - Reference Counting Errors
+    6. Resource Management Bugs
+        - File Descriptor Leaks
+        - Socket or Netlink Resource Leaks
+        - Improper Lock Handling
+        - Improper IRQ or Timer Resource Cleanup
+        - Dangling Pointers After Resource Free
+    7. NULL Pointer Dereference
+        - Unchecked Pointer Returned by Allocator or Lookup
+        - Dereference After Failure Path
+    8. Initialization and Finalization Issues
+        - Incorrect or Missed Initialization
+        - Improper Cleanup in Error Paths
+        - Mismatched Init/Exit in Loadable Kernel Modules
+    9. API Misuse
+        - Wrong API for Context
+        - Violating Pre/Post-conditions of Kernel Interfaces
+    10. Concurrency and Synchronization Bugs
+        - Improper Use of Memory Barriers
+        - Mishandled Interrupt Context vs. Process Context
+        - Improper RCU (Read-Copy-Update) Usage
+    11. Hardware Interaction Bugs
+        - Faulty MMIO/PIO Access
+        - Improper DMA Buffer Management
+        - Incorrect Handling of Hardware Interrupts
+    12. Error Code Handling
+        - Error Propagation Failures
+        - Swallowed Error Codes
+    13. Other (please specify)
 
     Provide only the category name as your answer. Or if you have another category for it provide that instead.
     """
@@ -148,6 +194,7 @@ def main():
     parser.add_argument("--limit", type=int, help="Limit the number of CVEs to process.")
     parser.add_argument("--setup", action="store_true", help="Add the 'category' column to the database and exit.")
     parser.add_argument("--redo-other", action="store_true", help="Redo processing for CVEs with 'Other' category.")
+    parser.add_argument("--start-after", type=str, help="The last successfully processed CVE ID to start processing after.")
     args = parser.parse_args()
 
     if args.setup:
@@ -157,7 +204,17 @@ def main():
     if args.redo_other:
         cve_ids = get_cve_ids_by_category("Other")
     else:
-        cve_ids = get_all_cve_ids()    
+        cve_ids = get_all_cve_ids() 
+
+    if args.start_after:
+        try:
+            # Find the index of the CVE to start after
+            start_index = cve_ids.index(args.start_after) + 1
+            cve_ids = cve_ids[start_index:]
+            print(f"Resuming process. Starting with CVE {cve_ids[0] if cve_ids else 'end of list'}.")
+        except ValueError:
+            print(f"Warning: CVE ID '{args.start_after}' not found. Starting from the beginning of the list.")
+
     if args.limit:
         cve_ids = cve_ids[:args.limit]
     print(f"Processing {len(cve_ids)} CVEs...")

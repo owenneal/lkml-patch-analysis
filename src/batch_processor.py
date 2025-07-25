@@ -8,11 +8,11 @@ preserving conversation relationships across batches.
 from typing import Dict, List, Tuple
 import networkx as nx
 
-from data_access import get_complete_thread_batches
-from graph_builder import create_evolution_graph2
+from core.data_access import get_complete_thread_batches
+from core.graph_builder import create_evolution_graph2
 
 try:
-    from neo4j_export import export_connected_subgraph_to_neo4j, test_connectivity_queries
+    from core.neo4j_export import export_connected_subgraph_to_neo4j, test_connectivity_queries
     NEO4J_AVAILABLE = True
 except ImportError:
     NEO4J_AVAILABLE = False

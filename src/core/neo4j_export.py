@@ -391,8 +391,8 @@ def test_connectivity_queries(uri: str = "bolt://localhost:7687", user: str = "n
 
 
 if __name__ == "__main__":
-    from data_access import get_patch_emails, analyze_database_coverage
-    from graph_builder import create_evolution_graph
+    from core.data_access import get_patch_emails, analyze_database_coverage
+    from core.graph_builder import create_evolution_graph
     
     print("Getting emails (using same sample size as visualization)...")
     emails = get_patch_emails(limit=1000)

@@ -11,8 +11,8 @@ from typing import List, Tuple
 from collections import defaultdict
 
 # database file path
-DATABASE_FILE = "lkml-patch-analysis/lkml-data-2024.db"
-SUSPECTED_CVE_DATABASE_FILE = "lkml-patch-analysis/suspected_cve_patches.db"
+DATABASE_FILE = "lkml-data-2024.db"
+SUSPECTED_CVE_DATABASE_FILE = "suspected_cve_patches.db"
 
 
 

@@ -19,14 +19,14 @@ import argparse
 import networkx as nx
 from typing import Dict
 
-from data_access import get_patch_emails, analyze_database_coverage, get_patch_emails2
-from graph_builder import create_evolution_graph, analyze_graph_components, create_evolution_graph2
-from visualization import visualize_evolution_graph
+from core.data_access import get_patch_emails, analyze_database_coverage, get_patch_emails2
+from core.graph_builder import create_evolution_graph, analyze_graph_components, create_evolution_graph2
+from core.visualization import visualize_evolution_graph
 from batch_processor import create_batch_processor
-from case_study import analyze_patch_merge_status, generate_case_study_report, verify_merge_indicators
-from email_parser import find_and_map_git_pull_patches, find_git_pull_emails_regex, check_git_pull_in_database, extract_patch_signature_improved
+from analysis.case_study import analyze_patch_merge_status, generate_case_study_report, verify_merge_indicators
+from core.email_parser import find_and_map_git_pull_patches, find_git_pull_emails_regex, check_git_pull_in_database, extract_patch_signature_improved
 try:
-    from neo4j_export import export_connected_subgraph_to_neo4j, test_connectivity_queries
+    from core.neo4j_export import export_connected_subgraph_to_neo4j, test_connectivity_queries
     NEO4J_READY = True
 except ImportError:
     print("Neo4j not available, skipping Neo4j export features.")
@@ -193,7 +193,7 @@ def setup_git_pull_table():
     """
     Ensure the git pull table exists in the database.
     """
-    from data_access import create_git_pull_table, populate_git_pull_table, get_connection
+    from core.data_access import create_git_pull_table, populate_git_pull_table, get_connection
     print("Setting up git pull table...")
     create_git_pull_table()
 
@@ -324,7 +324,7 @@ def main():
                 verify_merge_indicators(patch_analysis, email_data, graph)
 
             if args.text_report:
-                 from case_study import generate_merge_indicators_text_report
+                 from analysis.case_study import generate_merge_indicators_text_report
                  generate_merge_indicators_text_report(
                 patch_analysis, email_data, graph, output_file=args.report_file
             )

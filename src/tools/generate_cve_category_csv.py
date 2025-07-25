@@ -2,7 +2,7 @@ import sqlite3
 import csv
 import argparse
 from datetime import datetime
-from email_parser import extract_patch_info, extract_series_position
+from ..core.email_parser import extract_patch_info, extract_series_position
 
 """
 Script to generate a csv report which will include the initial patch email url of
@@ -11,7 +11,7 @@ a CVE related patch, its category, and the CVE id.
 
 
 
-SUSPECTED_CVE_DB = "lkml-patch-analysis/suspected_cve_patches.db" # change as needed
+SUSPECTED_CVE_DB = "suspected_cve_patches.db" # change as needed
 
 def find_base_patch_email(cursor, cve_id):
     """

@@ -9,7 +9,7 @@ import networkx as nx
 import re
 from collections import defaultdict
 from typing import Dict, List, Tuple
-from email_parser import parse_email_content, extract_patch_signature_improved, extract_temporal_info
+from .email_parser import parse_email_content, extract_patch_signature_improved, extract_temporal_info
 
 
 def _process_emails_and_create_nodes(emails: List[Tuple], G: nx.DiGraph) -> Tuple[Dict, Dict, Dict]:
@@ -678,11 +678,13 @@ def _add_patch_nodes_linux(G, emails):
         parsed = parse_email_content(html_content)
         email_data[email_id] = parsed
         subject = parsed.get('subject', '')
+        chronological_order, version_num, series_pos, series_total, parsed_date = extract_temporal_info(email_data, email_id)
         patch_sig, version_num, linux_version, series_pos, series_total = extract_patch_sig_and_version(subject)
         is_patch = '[PATCH' in subject.upper()
         G.add_node(email_id, subject=subject, author=parsed.get('from_author', ''), url=url,
                    patch_signature=patch_sig, version_num=version_num, linux_version=linux_version,
-                   series_pos=series_pos, series_total=series_total, is_patch=is_patch)
+                   series_pos=series_pos, series_total=series_total, is_patch=is_patch,
+                   chronological_order=chronological_order, parsed_date=parsed_date)
         if is_patch and patch_sig:
             patch_nodes[(patch_sig, linux_version)].append(email_id)
     return email_data, patch_nodes

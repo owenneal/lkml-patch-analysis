@@ -1,11 +1,11 @@
 import argparse
 import sqlite3
-from data_access import get_patch_emails_by_ids, get_all_cve_ids
-from email_parser import parse_email_content
-from graph_builder import create_patch_evolution_graph_linux, create_in_reply_to_graph, create_patch_name_version_graph
-from visualization import visualize_evolution_graph
+from ..core.data_access import get_patch_emails_by_ids, get_all_cve_ids
+from ..core.email_parser import parse_email_content
+from ..core.graph_builder import create_patch_evolution_graph_linux, create_in_reply_to_graph, create_patch_name_version_graph
+from ..core.visualization import visualize_evolution_graph
 
-SUSPECTED_CVE_DB = "lkml-patch-analysis/suspected_cve_patches.db" # Path to the database file, will probably need to remove the lkml-patch-analysis/ part if you have the project in a folder titled lkml-patch-analysis
+SUSPECTED_CVE_DB = "suspected_cve_patches.db" # Path to the database file, will probably need to remove the lkml-patch-analysis/ part if you have the project in a folder titled lkml-patch-analysis
 
 
 def export_email_bodies_by_subject(keyword, output_file="matched_email_bodies.txt", db_path="lkml-patch-analysis/lkml-data-2024.db"):
