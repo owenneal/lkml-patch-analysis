@@ -10,10 +10,9 @@ from typing import Dict, Optional, Set, List
 from bs4 import BeautifulSoup
 from dateutil import parser as date_parser
 import sqlite3
-from utils import get_best_email_body
+from .utils import get_best_email_body
 
 _maintainer_emails_cache = None
-
 
 
 '''
@@ -827,4 +826,23 @@ def find_and_map_git_pull_patches(email_data: dict) -> dict:
             'linked_emails': linked_emails,
         }
     return res
+
+def extract_filenames_from_diff(body: str) -> set:
+    """
+    Parses the body of an email to find the file paths from a git diff.
+    Looks for '--- a/path/to/file' and '+++ b/path/to/file' patterns.
+    """
+    files = set()
+    if not body:
+        return files
+    for line in body.splitlines():
+        if line.startswith('--- a/') or line.startswith('+++ b/'):
+            if '/dev/null' in line:
+                continue
+            try:
+                filepath = line.split(' ')[1][2:]
+                files.add(filepath)
+            except IndexError:
+                continue
+    return files
 

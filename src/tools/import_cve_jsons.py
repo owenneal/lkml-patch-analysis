@@ -15,7 +15,7 @@ It assumes the JSON files follow a specific structure as per the CVE JSON format
 CVE_ROOT_DIR = r"cvelistV5\cves\2024" # Adjust this path as needed to fit local desitination, to lead to the 2024 cve list
 # Database path for storing CVE records, adjust as needed
 # we decided to consolidate the cve related data into one db so this wil be the one
-DB_PATH = "lkml-patch-analysis/suspected_cve_patches.db" # again, change this as needed, i.e remove the lkml-patch-analysis/ if you have it in a different folder
+DB_PATH = "suspected_cve_patches.db" # again, change this as needed, i.e remove the lkml-patch-analysis/ if you have it in a different folder
 
 def create_cve_json_table(db_path):
     """Create the cve_json_records table in the SQLite database if it does not exist."""

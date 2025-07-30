@@ -1,382 +1,188 @@
 # LKML Patch Analysis Toolkit
 
-This toolkit analyzes Linux Kernel Mailing List (LKML) patch emails, detects merge indicators, maps patch discussions to git commits, and generates reports for research or engineering review.
+This project provides an end-to-end pipeline to analyze Linux Kernel Mailing List (LKML) data, link CVEs to commits, and build a Retrieval-Augmented Generation (RAG) system to query vulnerability information using a local Large Language Model (LLM).
 
----
 
 ## Table of Contents
 
 - [Requirements](#requirements)
 - [Setup](#setup)
-- [Project Structure](#project-structure)
-- [Usage](#usage)
-- [Script and File Descriptions](#script-and-file-descriptions)
-- [Reports](#reports)
+- [End-to-End Pipeline Workflow](#end-to-end-pipeline-workflow)
 - [Troubleshooting](#troubleshooting)
 
----
 
 ## Requirements
-
 - Python 3.8+
 - SQLite3
 - Git (for commit log extraction)
-- [pip](https://pip.pypa.io/en/stable/)
-- will probably need neo4j desktop as well if trying to export to neo4j but
-we weren't really focusing on that currently
 
 ### Python Libraries
-
 Install required libraries with:
 
 ```sh
-pip install beautifulsoup4 networkx requests tqdm dateutils pyvis OpenAI
+pip install beautifulsoup4 networkx requests tqdm dateutils pyvis OpenAI pandas sentence-transformers torch chromadb
 ```
-or other way if not using pip
 
----
+### Local LLM Server
+This project requires a local LLM server that is compatible with the OpenAI API format. [LM Studio](https://lmstudio.ai/) is a recommended option.
+- Download and install LM Studio.
+- Download a model (e.g., `gemma-2-9b-it-gguf`) is the recommended model for this project.
+- Start the server and ensure it is running on `http://localhost:1234/v1`.
+
 
 ## Setup
 
-1. **Clone this repository** and enter the directory:
+0. **Create a main project directory that will house two different repositories.**
+    - For example:
 
+1. **Clone this repository** and enter the directory:
+    - Create a directory for this project and clone the repository.
     ```sh
     git clone <repo-url>
     cd lkml-patch-analysis
     ```
 
-2. **Ensure the following files are present:**
-    - `lkml-data-2024.db` (LKML emails database)
-    - `maintainers.db` (Linux maintainers database)
-    - (Optional) `patch_report.txt`, `merge_indicators_report.txt`, etc.
-
-3. **Install dependencies** (see above).
-
----
-
-## Project Structure
-
-```
-lkml-patch-analysis/
-│
-├── lkml-data-2024.db           # SQLite database of LKML emails
-├── maintainers.db              # SQLite database of maintainers
-├── patch_report.txt            # Example output report
-├── merge_indicators_report.txt # Example merge indicator report
-├── unmatched_patch_commits.txt # Commits not matched to patches
-├── src/
-│   ├── main.py                 # Main entry point
-│   ├── data_access.py          # Database access functions
-│   ├── email_parser.py         # Email parsing and signal extraction
-│   ├── graph_builder.py        # Builds patch/thread graphs
-│   ├── case_study.py           # Merge indicator analysis and reporting
-│   ├── git_pull_case_study.py  # Git pull/commit mapping analysis
-│   └── maintainer_scraper.py   # Maintainer DB builder (optional)
-│
-├── lib/                        # JS/CSS libraries for HTML reports
-│
-└── README                      # This file
-```
-
----
-
-## Usage
-
-### 1. **Basic Patch Analysis**
-
-Run the main analysis script:
-
-```sh
-python src/main.py --case-study --text-report --sample-size 1000
-```
-
-- `--case-study`: Run merge indicator analysis
-- `--text-report`: Output a text report (`merge_indicators_report.txt`)
-- `--sample-size N`: Number of emails to process (default: 1000)
-
-### 2. **Generate Maintainer Database (if needed)**
-
-```sh
-python src/maintainer_scraper.py
-```
-
-### 3. **Analyze Git Pull Requests and Patch Mapping**
-
-```sh
-python src/git_pull_case_study.py
-```
-
-This script attempts to map `[GIT PULL]` emails to patch discussions and git commits.
-
-### 4. **Export to Neo4j (optional)**
-
-If you want to visualize graphs in Neo4j:
-
-```sh
-python src/main.py --export-neo4j --sample-size 1000
-```
-
-### 5. **Generate Patch Evolution Graphs**
-
-To create and visualize the patch evolution and discussion graphs, use the following commands:
-
-#### **Basic Graph Visualization (HTML, Pyvis)**
-
-```sh
-python src/main.py --sample-size 1000
-```
-
-- This will generate an interactive HTML file (e.g., `patch_evolution_graph.html`) in the project directory.
-- You can open this file in your browser to explore the patch/thread relationships.
-
-#### 6. **Export Graph to Neo4j (optional)**
-
-If you want to export the graph to a Neo4j database for advanced querying and visualization:
-
-```sh
-python src/main.py --export-neo4j --sample-size 1000
-```
-
-- Make sure Neo4j Desktop or Server is running and the connection details in the script match your setup.
-
-#### 7. **Batch Processing for Large Datasets**
-
-For large-scale graph creation and export (in batches):
-
-```sh
-python src/main.py --full-scale --batch-size 5000 --export-neo4j
-```
-
-- This will process emails in batches and export each batch to Neo4j.
-
-
-#### 8. **CVEs and Suspected Patch Analysis**
-
-
-### Downloading the CVE List
-
-To analyze CVEs, you need the official CVE JSON files.  
-We recommend using the [CVEProject/cvelistV5](https://github.com/CVEProject/cvelistV5) repository.
-
-1. Clone the CVE list repository:
+2. **Prepare Data Files:**
+    - Before running the pipeline, you must place the following data files in the project's root directory.
+    - `lkml-data-2024.db` (LKML emails database for 2024)
+    - `gitlog_2024.txt`: A text file containing the Linux git commit log for 2024.
+    - There may be a better way of getting the git log, but I had cloned the linux kernel repository and ran the following command to get the git log:
     ```sh
+    git log --since="2024-01-01" --until="2024-12-31" --pretty=format:"<commit_begin>%n%H%n%an%n%ae%n%ad%n%B<commit_end>" > gitlog_2024.txt
+    ```
+
+3.  **Download CVE Data:**
+    The pipeline requires a local copy of the official CVE records. Clone the `cvelistV5` repository into the same parent directory as `lkml-patch-analysis`.
+    ```sh
+    # From the directory containing 'lkml-patch-analysis/'
     git clone https://github.com/CVEProject/cvelistV5.git
     ```
-2. The 2024 CVEs will be in:  
-   `cvelistV5/cves/2024/`
-
-3. Make sure this path matches the `CVE_ROOT_DIR` in your `import_cve_jsons.py` (default is `cvelistV5\cves\2024`).
-
-
-### Suspected CVE Patch Analysis
-
-#### **Step 1: Import CVEs and Create Linux Kernel Table**
-
-This imports CVE JSONs and creates the `linux_kernel_cves` table in `lkml-patch-analysis/suspected_cve_patches.db`:
-
-```sh
-python lkml-patch-analysis/src/find_suspected_cve_patches.py --import-cves
-```
-
-#### **Step 2: Find and Store Suspected CVE Patches**
-
-This scans LKML emails for patches likely related to Linux kernel CVEs and stores them in the `suspected_cve_patches` table:
-
-```sh
-python lkml-patch-analysis/src/find_suspected_cve_patches.py --find-suspected
-```
-
-#### **Step 3: Populate Git Pull Emails Table**
-
-This extracts `[GIT PULL]` emails from the main LKML database and stores them in the `git_pull_emails` table in `suspected_cve_patches.db`.  
-You can limit the number of emails processed or not include a limit to use the entire mails database:
-
-```sh
-python lkml-patch-analysis/src/find_suspected_cve_patches.py --populate-gitpull --limit 10000
-```
-
-#### **Step 4: Categorize Patches with an LLM**
-
-This script uses a local Large Language Model (LLM) server (like LM Studio) to automatically categorize the type of vulnerability each patch fixes.
-
-1.  Ensure your local LLM server is running.
-2.  Run the categorization script. The `--setup` flag is only needed the very first time to prepare the database.
-
-    ```sh
-    # First time setup
-    python lkml-patch-analysis/src/categorize_cve_patches.py --setup
-
-    # Run categorization on all CVEs
-    python lkml-patch-analysis/src/categorize_cve_patches.py
-
-    # Re-process only the CVEs that were previously marked as "Other"
-    python lkml-patch-analysis/src/categorize_cve_patches.py --redo-other
+    Your directory structure should look like this:
     ```
+    your-workspace/
+    ├── lkml-patch-analysis/
+    └── cvelistV5/
 
-#### **Step 5: Generate a Report of Categorized CVEs**
+4. **Install dependencies** (see above).
+
+## End-to-End Pipeline Workflow
+
+The `src/main.py` script orchestrates the entire pipeline. You can run all steps at once or execute them individually.
+
+### Run the Full Pipeline
+To run all data processing and setup steps from start to finish, execute:
+```sh
+python src/main.py --step all
+```
+
+### Run Individual Steps
+You can also run each step manually. This is useful for debugging or re-running a specific part of the process.
+
+**Step 1: Import CVEs & Find Patches**
+Creates the `suspected_cve_patches.db` and populates it by finding LKML emails that appear to be patches for Linux kernel CVEs.
+```sh
+python src/main.py --step 1
+```
+
+**Step 2: Create Commit Database**
+Parses `gitlog_2024.txt` to create the `commits.db` SQLite database, containing commit hashes, messages, and diffs.
+```sh
+python src/main.py --step 2
+```
+
+**Step 3: Link CVEs to Commits**
+Matches suspected CVE patches to commits in `commits.db` and generates `cve_commit_report.csv`.
+```sh
+python src/main.py --step 3
+```
+
+**Step 4: Categorize CVEs with LLM**
+Adds a `category` column to the database. **Requires the local LLM server to be running.**
+```sh
+python src/main.py --step 4
+```
+
+**Step 5: Generate Final CSV Report**
+Cleans and consolidates the categorized data into a final report, `final_cve_analysis_report_YYYYMMDD.csv`.
+```sh
+python src/main.py --step 5
+```
+
+**Step 6: Generate Embeddings**
+Creates vector embeddings for each CVE thread's full text content and saves them to `cve_embeddings.pkl`.
+```sh
+python src/main.py --step 6
+```
+
+**Step 7: Load Embeddings into ChromaDB**
+Loads the embeddings and metadata into a local ChromaDB vector store located at `chroma_db/`.
+```sh
+python src/main.py --step 7
+```
+
+## Querying the RAG System
+
+- Once the pipeline has been run successfully, you can ask questions about the CVE data.
+- Currently, it looks like including a CVE ID in the query is required to get a response.
+- Due to the nature of the data, the system is designed to answer questions about specific CVEs and their related patches. Maybe a better model will be able to answer more general questions or having a much larger dataset would help with that.
+
+- So make sure to include a CVE ID in your query.
+- CVE IDs can be found in the `final_cve_analysis_report_YYYYMMDD.csv` file generated in Step 5.
+
+### Via Command Line
+Use `step 8` in `main.py` with a `--query` argument.
+```sh
+python src/main.py --step 8 --query "Can you show me the code fix for CVE-2024-38575 a NULL Pointer Dereference issue in the Linux Kernel?"
+```
+
+
+# Other useful scripts not directly part of the main pipeline or RAG system
+
+## **Generate a Report of Categorized CVEs**
 
 After categorizing the CVEs, you can generate a clean CSV report.
 
 ```sh
-python lkml-patch-analysis/src/generate_cve_category_csv.py
+python -m src.tools.generate_cve_category_csv
 ```
+
 This will create a file like `cve_categories_YYYYMMDD.csv` in the `src` directory.
 
-#### **Step 6: Visualize a Specific CVE Patch Thread**
+## **Visualize a Specific CVE Patch Thread**
 
 To visualize the email discussion graph for a single CVE, use the `cve_patch_graph_tool.py` script.
 
 1.  First, list all available CVEs to find one to investigate:
     ```sh
-    python lkml-patch-analysis/src/cve_patch_graph_tool.py --list-cves
+    python -m .src.tools.cve_patch_graph_tool --list-cves
     ```
 
 2.  Then, generate the graph for a specific CVE ID:
     ```sh
-    python lkml-patch-analysis/src/cve_patch_graph_tool.py CVE-2024-26687 --graph
+    python -m src.tools.cve_patch_graph_tool CVE-2024-26687 --graph
     ```
-This will create an interactive HTML file (e.g., `patch_evolution_graph_CVE_2024_26687.html`) showing the relationships between the emails in that thread.
-
-
----
+- This will create an interactive HTML file (e.g., `patch_evolution_graph_CVE_2024_26687.html`) showing the relationships between the emails in that thread. You can open this file in a web browser to explore the patch discussion visually.
 
 
 **Note:**  
 - The HTML graph files are saved as `patch_evolution_graph.html` (and similar names) in the `lkml-patch-analysis/` directory.
-- You do **not** need to run `case_study.py` directly; all relevant analysis is now handled via `main.py` and `git_pull_case_study.py`.
+- As the project is set up in modules for those scripts (all but main really) they are run with this as an example: python -m src.tools.cve_patch_graph_tool CVE-2024-26687 --graph
+- You may see an error about `maintainers.db` not being found. This is unimportant and does not effect the main system. It was an old line of thinking that ended up not being reliable. I have left it in for now, but it can be removed if desired, the related code is in the email_parser.py and mainainer_scraper.py which is not used in the main pipeline.
 
-
-## Script and File Descriptions
-
-- **src/main.py**  
-  Purpose:
-    The main entry point for the toolkit. Handles command-line arguments, orchestrates the workflow (database analysis, graph building, merge indicator case study, Neo4j export, etc.), and produces reports.
-
-  Key Features:
-    - Parses command-line arguments for all major features.
-    - Loads emails from the database and builds patch/thread graphs.
-    - Runs merge indicator analysis and generates reports. (not really useful now that using the gitpull emails and linux github commit logs for real proof of merge instead of just heuristics)
-    - Optionally exports graphs to Neo4j for visualization.
-
-- **src/data_access.py**  
-  IMPORTANT: might need to change the global variable for the DATABASE_PATH at the top of the file if necessary
-
-  Purpose:
-    Provides all database access functions for reading emails, threads, and git pull requests from the SQLite database.
-
-  Key Features:
-    - Fetches patch emails, git pull emails, and thread data.
-    - Provides database statistics and coverage analysis.
-    - Contains utility functions for exploring and analyzing the database schema and contents.
-
-
-- **src/email_parser.py**  
-  Purpose:
-    Parses raw email content (HTML or plain text) and extracts structured information such as metadata, patch details, merge indicators, and maintainer signals.
-
-  Key Features:
-    - Parses email subject, author, date, and body.
-    - Extracts patch version, series info, and normalized patch signatures.
-    - Detects merge indicators (e.g., "Acked-by", "Reviewed-by", "applied", etc.) and checks if they come from known maintainers.
-    - Extracts commit hashes and patch references from git pull emails.
-    - Provides helper functions for signal extraction and maintainer lookup.
-
-- **src/graph_builder.py**  
-  Purpose:
-    Builds and manages the patch evolution and thread discussion graphs using NetworkX.
-
-  Key Features:
-    - Adds emails as nodes with rich metadata.
-    - Connects related emails via patch evolution, thread reply, and discussion edges.
-    - Groups emails into patch families and threads.
-    - Provides statistics and utilities for graph analysis.
-
-- **src/case_study.py**  (not a reason to use this anymore, first attempt at trying to determine likelihood of a patch being merged, the git pull case study .py is current working method)
-  Purpose:
-    Implements the merge indicator case study and reporting logic.
-
-  Key Features:
-    - Analyzes patch families for merge likelihood using detected signals.
-    - Calculates merge probabilities and assigns status labels (e.g., "Very Likely Merged").
-    - Generates detailed text and HTML reports with evidence snippets.
-    - Provides functions for manual validation and evidence review.
-
-
-- **src/git_pull_case_study.py**  (used as a standalone script to analyze git pull emails and map them to patch discussions)
-  Purpose:
-    Analyzes [GIT PULL] emails, extracts referenced patches/commits, and attempts to map them to patch discussions and git commit hashes.
-
-  Key Features:
-    - Extracts commit authors and subjects from pull request emails.
-    - Organizes and links git pull emails to patch discussions using subject matching.
-    - Generates reports mapping pull requests to patch emails and unmatched commits.
-    - Optionally fetches commit info from GitHub for unmatched patches.
-
-- **src/maintainer_scraper.py**  (no reason to use this either, was used to make a database of the
-lkml official maintainers to use in tandem with the case_study.py heuristic approach)
-  (Optional) Scrapes and builds the maintainers database from kernel sources.
-
-- **src/find_suspected_cve_patches.py**  
-  Purpose:
-    Standalone script to manage CVE data import, suspected patch detection, and git pull email extraction for CVE research.
-
-  Key Features:
-    - Imports CVE JSONs from the official CVE list and creates the linux_kernel_cves table.
-    - Scans LKML emails for patches likely related to Linux kernel CVEs and stores them in the suspected_cve_patches table.
-    - Extracts [GIT PULL] emails from the main LKML database and stores them in the git_pull_emails table.
-    - Command-line interface for modular operation (--import-cves, --find-suspected, --populate-gitpull, --limit).
-
-- **src/import_cve_jsons.py**
-  Purpose:
-    Imports CVE JSON files (e.g., from CVEProject/cvelistV5) into an SQLite database for further analysis.
-
-  Key Features:
-    - Parses all CVE JSONs in a specified directory (default: 2024 CVEs).
-    - Extracts relevant fields (CVE ID, title, description, CWE, vendor, product, references).
-    - Populates the cve_json_records table.
-    - Creates and populates the linux_kernel_cves table for Linux-specific CVEs.
-
-
-- **src/determine_patch_quality.py**
-  Purpose:
-    Analyzes patch version history to label patch threads as "good", "average", or "bad" based on the number of revisions.
-
-  Key Features:
-    - Groups patch emails by signature and tracks version numbers.
-    - Labels patches as "good" (≤2 versions), "average" (3–4), or "bad" (≥5).
-    - Outputs a summary file (patch_quality_labels.txt) for further research or reporting.
-
-
-- **lib/**  
-  JavaScript and CSS libraries for HTML visualization (not needed for text reports).
-
-
----
-
-## Reports
-
-- **merge_indicators_report.txt**:  
-  Text report of patch families, merge indicators, and evidence.
-
-- **patch_report.txt**:  
-  Mapping of git pull emails to patch discussions and commits.
-
-- **unmatched_patch_commits.txt**:  
-  Commits that could not be matched to any patch discussion.
----
 
 ## Troubleshooting
 
 - **No output or empty reports?**  
-  - Check that `lkml-data-2024.db` and `maintainers.db` are present and not empty.
+  - Check that `lkml-data-2024.db`, CVEs, and gitlog are present and not empty.
   - Try increasing `--sample-size`.
   - Ensure dependencies are installed.
 
 - **Neo4j export fails?**  
   - Make sure Neo4j is running and credentials are correct.
+  - Did not end up being used in the main pipeline, but if you want to use it, make sure to have Neo4j installed and running. It's kind of a pain to set up, so I didn't include it in the main pipeline also it isn't really useful for the RAG system as we use the chroma vector database instead.
 
 - **Maintainer DB missing?**  
-  - Run `python src/maintainer_scraper.py` to generate it.
+  - Run `python -m src.tools.maintainer_scraper` to generate it.
+  - This is not used in the main pipeline, but it can be useful for other analyses.
 
----
 

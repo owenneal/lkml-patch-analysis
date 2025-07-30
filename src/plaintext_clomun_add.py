@@ -1,4 +1,4 @@
-from git_pull_case_study import get_best_email_body
+from analysis.git_pull_case_study import get_best_email_body
 import sqlite3
 from tqdm import tqdm
 

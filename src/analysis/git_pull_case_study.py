@@ -1,9 +1,9 @@
 import re
 from typing import List, Dict
-from data_access import get_connection, get_git_pull_emails
-from email_parser import parse_email_content
+from ..core.data_access import get_connection, get_git_pull_emails
+from ..core.email_parser import parse_email_content
 import requests
-from utils import get_best_email_body
+from ..core.utils import get_best_email_body
 
 GIT_PULL_EMAILS = 6021
 

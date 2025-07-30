@@ -17,7 +17,7 @@ For example, we look for phrases like "queued to", "merged to",
 import networkx as nx
 from typing import Dict, List
 from collections import defaultdict
-from email_parser import extract_patch_signature_improved
+from ..core.email_parser import extract_patch_signature_improved
 
 def analyze_patch_merge_status(G: nx.DiGraph, email_data: Dict) -> Dict:
     """
