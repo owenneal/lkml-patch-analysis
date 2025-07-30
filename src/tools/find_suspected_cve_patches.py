@@ -22,11 +22,9 @@ how to use:
 
 """
 
-# i think you might need to change the path to remove the "lkml-patch-analysis/" , i have this project in a folder titled lkml-patch-analysis
-
-DB_PATH = "lkml-patch-analysis/lkml-data-2024.db" # this should stay the same, we are keeping the original email data in this database
-CVE_DB_PATH = "lkml-patch-analysis/suspected_cve_patches.db"  # this is the database where we store the suspected CVE patches data
-SUSPECTED_CVE_DB = "lkml-patch-analysis/suspected_cve_patches.db" # now stored in the same place as all cve data
+DB_PATH = "lkml-data-2024.db" # this should stay the same, we are keeping the original email data in this database
+CVE_DB_PATH = "suspected_cve_patches.db"  # this is the database where we store the suspected CVE patches data
+SUSPECTED_CVE_DB = "suspected_cve_patches.db" # now stored in the same place as all cve data
 
 
 def import_cves_and_create_kernel_table():
@@ -35,7 +33,7 @@ def import_cves_and_create_kernel_table():
     using the import_cve_jsons.py file
     """
     import_cve_jsons_main()
-    print("Creationg linux_kernel_cves table")
+    print("Creating linux_kernel_cves table")
     create_linux_kernel_table(SUSPECTED_CVE_DB)
 
 

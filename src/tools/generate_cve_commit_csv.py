@@ -2,9 +2,9 @@ import sqlite3
 import argparse
 import csv
 from datetime import datetime
-from ..core.data_access import get_all_cve_ids, get_patches_for_cve
+from ..core.data_access import get_patches_for_cve
 from ..core.utils import clean_csv_final_report
-from .link_cve_to_commit import normalize_subject # Re-use the normalizer
+from .link_cve_to_commit import normalize_subject
 
 SUSPECTED_CVE_DB = "suspected_cve_patches.db"
 COMMIT_DB_PATH = "commits.db"

@@ -3,3 +3,6 @@
 *.txt
 *.html
 __pycache__
+*.csv
+*.pkl
+/chroma_db

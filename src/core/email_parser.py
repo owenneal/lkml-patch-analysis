@@ -15,8 +15,6 @@ from .utils import get_best_email_body
 _maintainer_emails_cache = None
 
 
-
-
 '''
 Load maintainer emails from the database.
 This function connects to the SQLite database and retrieves all maintainer emails,

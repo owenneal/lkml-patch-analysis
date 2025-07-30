@@ -2,9 +2,8 @@ import sqlite3
 import argparse
 import re
 import csv
-from datetime import datetime
-from ..core.data_access import get_all_cve_ids, get_patches_for_cve, get_patch_emails_by_ids
-from ..core.email_parser import parse_email_content, extract_patch_info, extract_series_position, extract_filenames_from_diff
+import os
+from ..core.data_access import get_all_cve_ids, get_patches_for_cve
 
 COMMIT_DB_PATH = "commits.db"
 SUSPECTED_CVE_DB = "suspected_cve_patches.db"
@@ -18,27 +17,35 @@ def normalize_subject(subject: str) -> str:
 
 def create_and_populate_commit_db():
     """
-    Parses the git log and populates the commis.db sqlite database.
+    Parses the git log (now including diffs) and populates the commits.db sqlite database.
     """
-    
-    try:
-        if sqlite3.connect(COMMIT_DB_PATH).execute("SELECT name FROM sqlite_master WHERE type='table' AND name='commits'").fetchone():
-            print("Commit database already exists. Skipping creation.")
+    db_file = COMMIT_DB_PATH
+    # Check if the DB needs to be recreated, for adding extra columns
+    if os.path.exists(db_file):
+        conn_check = sqlite3.connect(db_file)
+        try:
+            conn_check.execute("SELECT diff FROM commits LIMIT 1")
+            print("Commit database already has the 'diff' column. Skipping creation.")
+            conn_check.close()
             return
-    except sqlite3.OperationalError:
-        pass # Table does not exist, we will create it
+        except sqlite3.OperationalError:
 
-    print("Creating commit database...")
-    conn = sqlite3.connect(COMMIT_DB_PATH)
+            print("Database schema is outdated. Deleting and rebuilding...")
+            conn_check.close()
+            os.remove(db_file)
+        
+    print("Creating commit database with diffs...")
+    conn = sqlite3.connect(db_file)
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE commits (
             hash TEXT PRIMARY KEY,
-            subject TEXT
+            subject TEXT,
+            message TEXT,
+            diff TEXT
         )
     """)
-
-    with open(GIT_LOG_PATH, 'r', encoding='utf-8', errors='ignore') as f:
+    with open("gitlog_2024.txt", 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read()
     
     commits = content.split('<commit_begin>\n')
@@ -49,24 +56,38 @@ def create_and_populate_commit_db():
         lines = commit_data.strip().split('\n')
         commit_hash = lines[0]
         
-        # Find the date line, the subject is on the next line
         subject_line_ind = -1
         for i, line in enumerate(lines):
-            if re.search(r'\s\d{4}\s[+-]\d{4}$', line): # look for a date line like '... 2025 -0700'
+            if re.search(r'\s\d{4}\s[+-]\d{4}$', line):
                 subject_line_ind = i + 1
                 break
+        
         if subject_line_ind == -1 or subject_line_ind >= len(lines):
             continue
+            
         subject = lines[subject_line_ind]
+        
+        diff_start_index = -1
+        for i, line in enumerate(lines):
+            if line.startswith('diff --git'):
+                diff_start_index = i
+                break
+        
+        if diff_start_index != -1:
+            message = "\n".join(lines[subject_line_ind+1:diff_start_index]).strip()
+            diff = "\n".join(lines[diff_start_index:]).strip()
+        else:
+            message = "\n".join(lines[subject_line_ind+1:]).strip()
+            diff = ""
 
         cursor.execute(
-            "INSERT OR IGNORE INTO commits (hash, subject) VALUES (?, ?)",
-            (commit_hash, normalize_subject(subject))
+            "INSERT OR IGNORE INTO commits (hash, subject, message, diff) VALUES (?, ?, ?, ?)",
+            (commit_hash, normalize_subject(subject), message, diff)
         )
 
     conn.commit()
     conn.close()
-    print("Commit database created successfully.")
+    print("Commit database created successfully with commit messages and diffs.")
 
 
 
